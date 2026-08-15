@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"go-task-queue/internal/model"
@@ -50,6 +51,44 @@ func TestRetryTask(t *testing.T) {
 	task, _ = svc.GetTask(context.Background(), "t1")
 	if task.Status != model.StatusPending {
 		t.Fatalf("expected pending, got %s", task.Status)
+	}
+}
+
+func TestRetryMaxRetriesExceeded(t *testing.T) {
+	svc := NewQueueService(store.NewMemoryStore())
+	svc.SubmitTask(context.Background(), "t1", "test", "payload", 2)
+
+	// markFailed flips the task back to failed so it becomes retryable again.
+	markFailed := func() {
+		task, _ := svc.GetTask(context.Background(), "t1")
+		task.Status = model.StatusFailed
+		svc.store.UpdateTask(task)
+	}
+
+	// MaxRetries=2: exactly two retries should succeed and increment the counter.
+	for i := 1; i <= 2; i++ {
+		markFailed()
+		if err := svc.RetryTask(context.Background(), "t1"); err != nil {
+			t.Fatalf("retry %d should succeed, got: %v", i, err)
+		}
+		task, _ := svc.GetTask(context.Background(), "t1")
+		if task.Retries != i {
+			t.Fatalf("expected retries=%d, got %d", i, task.Retries)
+		}
+		if task.Status != model.StatusPending {
+			t.Fatalf("expected pending, got %s", task.Status)
+		}
+	}
+
+	// The third retry must be rejected once the limit is reached.
+	markFailed()
+	err := svc.RetryTask(context.Background(), "t1")
+	if !errors.Is(err, ErrMaxRetriesExceeded) {
+		t.Fatalf("expected ErrMaxRetriesExceeded, got: %v", err)
+	}
+	task, _ := svc.GetTask(context.Background(), "t1")
+	if task.Retries != 2 {
+		t.Fatalf("retries should stay at 2 after rejection, got %d", task.Retries)
 	}
 }
 

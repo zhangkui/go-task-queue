@@ -2,12 +2,17 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"go-task-queue/internal/model"
 	"go-task-queue/internal/store"
 )
+
+// ErrMaxRetriesExceeded is returned when a task has already been retried the
+// configured maximum number of times and may no longer be retried.
+var ErrMaxRetriesExceeded = errors.New("max retries exceeded")
 
 type QueueService struct {
 	store *store.MemoryStore
@@ -71,6 +76,11 @@ func (svc *QueueService) RetryTask(ctx context.Context, id string) error {
 		return fmt.Errorf("task is not in failed status, current: %s", task.Status)
 	}
 
+	if task.Retries >= task.MaxRetries {
+		return ErrMaxRetriesExceeded
+	}
+
+	task.Retries++
 	task.Status = model.StatusPending
 	task.CompletedAt = 0
 	svc.store.UpdateTask(task)
