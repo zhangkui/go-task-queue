@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"go-task-queue/internal/model"
@@ -35,6 +36,17 @@ func TestExecuteTask(t *testing.T) {
 	task, _ := svc.GetTask(context.Background(), "t1")
 	if task.Status != model.StatusCompleted {
 		t.Fatalf("expected completed, got %s", task.Status)
+	}
+}
+
+func TestExecuteTask_NonExistent(t *testing.T) {
+	svc := NewQueueService(store.NewMemoryStore())
+	err := svc.ExecuteTask(context.Background(), "missing")
+	if err == nil {
+		t.Fatal("expected error for non-existent task, got nil")
+	}
+	if !errors.Is(err, store.ErrTaskNotFound) {
+		t.Fatalf("expected ErrTaskNotFound, got %v", err)
 	}
 }
 
