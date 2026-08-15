@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"go-task-queue/internal/model"
@@ -50,6 +51,45 @@ func TestRetryTask(t *testing.T) {
 	task, _ = svc.GetTask(context.Background(), "t1")
 	if task.Status != model.StatusPending {
 		t.Fatalf("expected pending, got %s", task.Status)
+	}
+	if task.Retries != 1 {
+		t.Fatalf("expected 1 retry, got %d", task.Retries)
+	}
+}
+
+func TestRetryTaskStopsAtMaxRetries(t *testing.T) {
+	svc := NewQueueService(store.NewMemoryStore())
+	svc.SubmitTask(context.Background(), "t1", "test", "payload", 2)
+
+	for retry := 1; retry <= 2; retry++ {
+		task, _ := svc.GetTask(context.Background(), "t1")
+		task.Status = model.StatusFailed
+		if err := svc.store.UpdateTask(task); err != nil {
+			t.Fatalf("mark task failed: %v", err)
+		}
+
+		if err := svc.RetryTask(context.Background(), "t1"); err != nil {
+			t.Fatalf("retry %d failed: %v", retry, err)
+		}
+	}
+
+	task, _ := svc.GetTask(context.Background(), "t1")
+	task.Status = model.StatusFailed
+	if err := svc.store.UpdateTask(task); err != nil {
+		t.Fatalf("mark task failed: %v", err)
+	}
+
+	err := svc.RetryTask(context.Background(), "t1")
+	if !errors.Is(err, ErrMaxRetriesExceeded) {
+		t.Fatalf("expected ErrMaxRetriesExceeded, got %v", err)
+	}
+
+	task, _ = svc.GetTask(context.Background(), "t1")
+	if task.Retries != 2 {
+		t.Fatalf("expected retries to remain 2, got %d", task.Retries)
+	}
+	if task.Status != model.StatusFailed {
+		t.Fatalf("expected failed status, got %s", task.Status)
 	}
 }
 

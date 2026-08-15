@@ -70,12 +70,14 @@ func (svc *QueueService) RetryTask(ctx context.Context, id string) error {
 	if task.Status != model.StatusFailed {
 		return fmt.Errorf("task is not in failed status, current: %s", task.Status)
 	}
+	if task.Retries >= task.MaxRetries {
+		return fmt.Errorf("%w: %d", ErrMaxRetriesExceeded, task.MaxRetries)
+	}
 
+	task.Retries++
 	task.Status = model.StatusPending
 	task.CompletedAt = 0
-	svc.store.UpdateTask(task)
-
-	return nil
+	return svc.store.UpdateTask(task)
 }
 
 func (svc *QueueService) DeleteTask(ctx context.Context, id string) error {
