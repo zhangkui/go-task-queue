@@ -38,6 +38,8 @@ func (s *MemoryStore) GetTask(id string) (*model.Task, error) {
 }
 
 func (s *MemoryStore) GetTaskStatus(id string) (model.TaskStatus, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	task, exists := s.tasks[id]
 	if !exists {
 		return "", ErrTaskNotFound

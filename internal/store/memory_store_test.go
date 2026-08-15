@@ -1,6 +1,7 @@
 package store
 
 import (
+	"sync"
 	"testing"
 
 	"go-task-queue/internal/model"
@@ -73,4 +74,59 @@ func TestDeleteTask(t *testing.T) {
 	if _, err := s.GetTask("t1"); err != ErrTaskNotFound {
 		t.Fatalf("expected not found after delete")
 	}
+}
+
+// TestGetTaskStatusConcurrent reproduces the "concurrent map read and map write"
+// crash: many goroutines query task status while writers mutate the store.
+// The read path (/task/status) must hold the store's read lock; otherwise a
+// concurrent writer (submit/execute/delete) triggers a runtime fatal error.
+// Run with -race to also surface any remaining data race.
+func TestGetTaskStatusConcurrent(t *testing.T) {
+	s := NewMemoryStore()
+	s.Add(&model.Task{ID: "t1", Status: model.StatusPending})
+
+	var writers sync.WaitGroup
+	var readers sync.WaitGroup
+	stop := make(chan struct{})
+
+	// Readers: concurrent status queries (the /task/status path). They keep
+	// hammering the store until the writers finish, then drain.
+	readers.Add(64)
+	for i := 0; i < 64; i++ {
+		go func() {
+			defer readers.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					if _, err := s.GetTaskStatus("t1"); err != nil && err != ErrTaskNotFound {
+						t.Errorf("unexpected error: %v", err)
+						return
+					}
+				}
+			}
+		}()
+	}
+
+	// Writers: concurrent mutations of the store (add/update/delete churn).
+	writers.Add(16)
+	for i := 0; i < 16; i++ {
+		go func() {
+			defer writers.Done()
+			for j := 0; j < 5000; j++ {
+				s.UpdateTask(&model.Task{ID: "t1", Status: model.StatusRunning})
+				// Force occasional map growth/shrink churn to widen the race window.
+				if j%500 == 0 {
+					s.Add(&model.Task{ID: "t1-x", Status: model.StatusPending})
+					s.DeleteTask("t1-x")
+				}
+			}
+		}()
+	}
+
+	// Once writers finish, release the readers and wait for them to drain.
+	writers.Wait()
+	close(stop)
+	readers.Wait()
 }
