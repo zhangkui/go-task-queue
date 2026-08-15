@@ -18,6 +18,9 @@ func NewQueueService(s *store.MemoryStore) *QueueService {
 }
 
 func (svc *QueueService) SubmitTask(ctx context.Context, id, name, payload string, maxRetries int) (*model.Task, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	task := &model.Task{
 		ID:         id,
 		Name:       name,
