@@ -34,7 +34,9 @@ func (s *MemoryStore) GetTask(id string) (*model.Task, error) {
 	if !exists {
 		return nil, ErrTaskNotFound
 	}
-	return task, nil
+	// Return a copy so callers cannot mutate the stored task.
+	cp := *task
+	return &cp, nil
 }
 
 func (s *MemoryStore) GetTaskStatus(id string) (model.TaskStatus, error) {
@@ -61,7 +63,9 @@ func (s *MemoryStore) ListTasks(status model.TaskStatus) []*model.Task {
 	result := make([]*model.Task, 0)
 	for _, t := range s.tasks {
 		if status == "" || t.Status == status {
-			result = append(result, t)
+			// Append a copy so callers cannot mutate the stored task.
+			cp := *t
+			result = append(result, &cp)
 		}
 	}
 	return result
