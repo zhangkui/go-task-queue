@@ -38,6 +38,13 @@ func TestExecuteTask(t *testing.T) {
 	}
 }
 
+func TestExecuteTaskNotFound(t *testing.T) {
+	svc := NewQueueService(store.NewMemoryStore())
+
+	if err := svc.ExecuteTask(context.Background(), "missing"); err != store.ErrTaskNotFound {
+		t.Fatalf("expected ErrTaskNotFound, got %v", err)
+	}
+}
 func TestRetryTask(t *testing.T) {
 	svc := NewQueueService(store.NewMemoryStore())
 	svc.SubmitTask(context.Background(), "t1", "test", "payload", 2)

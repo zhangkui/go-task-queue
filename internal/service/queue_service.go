@@ -47,15 +47,18 @@ func (svc *QueueService) ListTasks(ctx context.Context, status model.TaskStatus)
 
 func (svc *QueueService) ExecuteTask(ctx context.Context, id string) error {
 	task, err := svc.store.GetTask(id)
+	if err != nil {
+		return err
+	}
 
 	task.Status = model.StatusRunning
-	svc.store.UpdateTask(task)
+	if err := svc.store.UpdateTask(task); err != nil {
+		return err
+	}
 
 	task.Status = model.StatusCompleted
 	task.CompletedAt = time.Now().Unix()
-	svc.store.UpdateTask(task)
-
-	if err != nil {
+	if err := svc.store.UpdateTask(task); err != nil {
 		return err
 	}
 	return nil
