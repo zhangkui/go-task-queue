@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"go-task-queue/internal/model"
@@ -23,6 +24,23 @@ func TestSubmitAndGetTask(t *testing.T) {
 	}
 	if got.Name != "test" {
 		t.Fatalf("expected test, got %s", got.Name)
+	}
+}
+
+func TestSubmitTaskWithCanceledContextDoesNotPersistTask(t *testing.T) {
+	svc := NewQueueService(store.NewMemoryStore())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	task, err := svc.SubmitTask(ctx, "t1", "test", "payload", 3)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if task != nil {
+		t.Fatalf("expected no task, got %#v", task)
+	}
+	if _, err := svc.GetTask(context.Background(), "t1"); !errors.Is(err, store.ErrTaskNotFound) {
+		t.Fatalf("expected task not to be persisted, got %v", err)
 	}
 }
 
