@@ -47,18 +47,18 @@ func (svc *QueueService) ListTasks(ctx context.Context, status model.TaskStatus)
 
 func (svc *QueueService) ExecuteTask(ctx context.Context, id string) error {
 	task, err := svc.store.GetTask(id)
-
-	task.Status = model.StatusRunning
-	svc.store.UpdateTask(task)
-
-	task.Status = model.StatusCompleted
-	task.CompletedAt = time.Now().Unix()
-	svc.store.UpdateTask(task)
-
 	if err != nil {
 		return err
 	}
-	return nil
+
+	task.Status = model.StatusRunning
+	if err := svc.store.UpdateTask(task); err != nil {
+		return err
+	}
+
+	task.Status = model.StatusCompleted
+	task.CompletedAt = time.Now().Unix()
+	return svc.store.UpdateTask(task)
 }
 
 func (svc *QueueService) RetryTask(ctx context.Context, id string) error {
@@ -73,9 +73,7 @@ func (svc *QueueService) RetryTask(ctx context.Context, id string) error {
 
 	task.Status = model.StatusPending
 	task.CompletedAt = 0
-	svc.store.UpdateTask(task)
-
-	return nil
+	return svc.store.UpdateTask(task)
 }
 
 func (svc *QueueService) DeleteTask(ctx context.Context, id string) error {

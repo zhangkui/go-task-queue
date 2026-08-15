@@ -23,7 +23,7 @@ func (s *MemoryStore) Add(task *model.Task) error {
 	if _, exists := s.tasks[task.ID]; exists {
 		return ErrTaskAlreadyExists
 	}
-	s.tasks[task.ID] = task
+	s.tasks[task.ID] = cloneTask(task)
 	return nil
 }
 
@@ -34,10 +34,12 @@ func (s *MemoryStore) GetTask(id string) (*model.Task, error) {
 	if !exists {
 		return nil, ErrTaskNotFound
 	}
-	return task, nil
+	return cloneTask(task), nil
 }
 
 func (s *MemoryStore) GetTaskStatus(id string) (model.TaskStatus, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	task, exists := s.tasks[id]
 	if !exists {
 		return "", ErrTaskNotFound
@@ -51,7 +53,7 @@ func (s *MemoryStore) UpdateTask(task *model.Task) error {
 	if _, exists := s.tasks[task.ID]; !exists {
 		return ErrTaskNotFound
 	}
-	s.tasks[task.ID] = task
+	s.tasks[task.ID] = cloneTask(task)
 	return nil
 }
 
@@ -61,7 +63,7 @@ func (s *MemoryStore) ListTasks(status model.TaskStatus) []*model.Task {
 	result := make([]*model.Task, 0)
 	for _, t := range s.tasks {
 		if status == "" || t.Status == status {
-			result = append(result, t)
+			result = append(result, cloneTask(t))
 		}
 	}
 	return result
@@ -75,4 +77,12 @@ func (s *MemoryStore) DeleteTask(id string) error {
 	}
 	delete(s.tasks, id)
 	return nil
+}
+
+func cloneTask(task *model.Task) *model.Task {
+	if task == nil {
+		return nil
+	}
+	clone := *task
+	return &clone
 }
