@@ -64,6 +64,28 @@ func TestListTasks(t *testing.T) {
 	}
 }
 
+func TestListTasksReturnsIndependentCopies(t *testing.T) {
+	s := NewMemoryStore()
+	if err := s.Add(&model.Task{ID: "t1", Status: model.StatusPending}); err != nil {
+		t.Fatalf("add failed: %v", err)
+	}
+
+	tasks := s.ListTasks("")
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+
+	tasks[0].Status = model.StatusCompleted
+
+	status, err := s.GetTaskStatus("t1")
+	if err != nil {
+		t.Fatalf("get status failed: %v", err)
+	}
+	if status != model.StatusPending {
+		t.Fatalf("expected stored task to remain pending, got %s", status)
+	}
+}
+
 func TestDeleteTask(t *testing.T) {
 	s := NewMemoryStore()
 	s.Add(&model.Task{ID: "t1", Name: "test"})

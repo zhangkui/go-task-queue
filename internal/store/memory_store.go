@@ -61,7 +61,8 @@ func (s *MemoryStore) ListTasks(status model.TaskStatus) []*model.Task {
 	result := make([]*model.Task, 0)
 	for _, t := range s.tasks {
 		if status == "" || t.Status == status {
-			result = append(result, t)
+			taskCopy := *t
+			result = append(result, &taskCopy)
 		}
 	}
 	return result
